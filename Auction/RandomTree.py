@@ -18,7 +18,6 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 model = RandomForestClassifier(n_estimators=100, random_state=42)
-
 model.fit(X_train_scaled, y_train)
 
 preds = model.predict(X_test_scaled)
