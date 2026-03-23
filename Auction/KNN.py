@@ -1,43 +1,140 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix
+import numpy as np
+import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import Pipeline
+# Change this:
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# To this:
+from sklearn.metrics import mean_absolute_error, mean_squared_error, root_mean_squared_error, r2_score
+
+
+# load the dataset
 data = pd.read_csv("Auction/data.csv")
 
-
-# X becomes all columns except those two
+# separate features and target
 X = data.drop(columns=["verification.result", "verification.time"])
+# regression target: predict verification.time
+y = data["verification.time"]
 
-# y becomes just result
-y = data["verification.result"]
+# split into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.2,
+    random_state=42
+)
 
-# split data into training and test test_size=.20 
-# 20% is testing and 42 is a random number to start randomly
-X_train, X_test, y_train, y_test = train_test_split(X , y, test_size=0.2, random_state=42)
+# build a pipeline so scaling + knn happen together safely
+pipe = Pipeline([
+    ("scaler", StandardScaler()),      # scale the features
+    ("knn", KNeighborsRegressor())     # run knn
+])
 
-# scale the data down so big numbers dont mess with data
-scaler = StandardScaler()
-# training data is used to find scaler information and then transformed
-X_train_scaled = scaler.fit_transform(X_train)
-# transformed using scaler data in the object from the one above
-X_test_scaled = scaler.transform(X_test)
+# tell gridsearch what hyperparameters to try
+param_grid = {
+    "knn__n_neighbors": list(range(1, 51)),   # try k from 1 to 50
+    "knn__weights": ["uniform", "distance"],  # equal vote vs distance-weighted vote
+    "knn__p": [1, 2]                          # manhattan vs euclidean distance
+}
 
-best = 0
-bestScore = 0
+# run cross validation and score using RMSE (lower is better)
+grid = GridSearchCV(
+    pipe,
+    param_grid,
+    scoring="neg_root_mean_squared_error",
+    cv=5
+)
 
-# find best k for best acc
-for k in range(1, 21):
-    model = KNeighborsClassifier(n_neighbors=k)
-    model.fit(X_train_scaled, y_train)
-    preds = model.predict(X_test_scaled)
-    acc = accuracy_score(y_test, preds)
-    #print(k, acc)
-    if acc > bestScore:
-        bestScore = acc
-        best = k
+# fit only on training data
+grid.fit(X_train, y_train)
 
-print(best, " ", bestScore)
+# print best hyperparameters found
+print("best parameters found:", grid.best_params_)
+print("best cross-validated RMSE:", -grid.best_score_)
 
-# print("Confusion Matrix:\n", confusion_matrix(y_test,predictions))
+# grab the best model
+best_model = grid.best_estimator_
+
+# make predictions on test set
+preds = best_model.predict(X_test)
+
+# print performance report
+mae = mean_absolute_error(y_test, preds)
+rmse = root_mean_squared_error(y_test, preds)
+r2 = r2_score(y_test, preds)
+
+print("\nregression metrics:\n")
+print(f"MAE:  {mae:.4f}")
+print(f"RMSE: {rmse:.4f}")
+print(f"R2:   {r2:.4f}")
+
+
+# grab full cross-validation results
+results = grid.cv_results_
+
+# pull out hyperparameter values that were tested
+k_vals = np.array([p["knn__n_neighbors"] for p in results["params"]])
+w_vals = np.array([p["knn__weights"] for p in results["params"]])
+p_vals = np.array([p["knn__p"] for p in results["params"]])
+
+# get average RMSE and variation across folds
+mean_rmse = -results["mean_test_score"]
+std_rmse  = results["std_test_score"]
+
+# identify the best performing combo
+best_idx = grid.best_index_
+best_k   = results["params"][best_idx]["knn__n_neighbors"]
+best_rmse  = mean_rmse[best_idx]
+
+# plot how RMSE changes across k values
+plt.figure(figsize=(10, 6))
+plt.title("knn hyperparameter search (5-fold cv)")
+plt.xlabel("number of neighbors (k)")
+plt.ylabel("mean cross-validated RMSE")
+
+combos = [
+    ("uniform", 1),
+    ("uniform", 2),
+    ("distance", 1),
+    ("distance", 2),
+]
+
+# draw a line for each weights + distance combo
+for w, p in combos:
+    mask = (w_vals == w) & (p_vals == p)
+
+    ks = k_vals[mask]
+    ms = mean_rmse[mask]
+    ss = std_rmse[mask]
+
+    # sort by k so lines look clean
+    order = np.argsort(ks)
+    ks, ms, ss = ks[order], ms[order], ss[order]
+
+    label = f"weights={w}, p={p}"
+    plt.plot(ks, ms, label=label)
+
+    # shaded region shows how much scores varied across folds
+    plt.fill_between(ks, ms - ss, ms + ss, alpha=0.15)
+
+# mark the best k
+plt.scatter(best_k, best_rmse, s=100)
+plt.axvline(best_k, linestyle="--")
+
+plt.legend()
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+residuals = y_test - preds
+plt.figure(figsize=(8, 5))
+plt.scatter(preds, residuals, alpha=0.5, color='teal')
+plt.axhline(0, color='red', linestyle='--')
+plt.xlabel('Predicted Verification Time')
+plt.ylabel('Residuals (Actual - Predicted)')
+plt.title('KNN Residual Plot (k=3)')
+plt.show()

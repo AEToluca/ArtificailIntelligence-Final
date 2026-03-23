@@ -1,30 +1,58 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import numpy as np
+import matplotlib.pyplot as plt
 
+from sklearn.model_selection import KFold, cross_val_predict
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
+
+# Load data
 data = pd.read_csv("Auction/data.csv")
 
 X = data.drop(columns=["verification.result", "verification.time"])
-y = data["verification.result"]
+# regression target: predict verification.time
+y = data["verification.time"]
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+# Pipeline = scaler + model
+pipe = Pipeline([
+    ("scaler", StandardScaler()),
+    ("model", LinearRegression()),
+])
 
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+# Cross-validation setup
+cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-model = LogisticRegression(max_iter=5000)
-model.fit(X_train_scaled, y_train)
+# Out-of-fold predictions for regression metrics
+preds = cross_val_predict(pipe, X, y, cv=cv, method="predict")
 
-preds = model.predict(X_test_scaled)
+# Metrics
+mae = mean_absolute_error(y, preds)
+rmse = root_mean_squared_error(y, preds)
+r2 = r2_score(y, preds)
 
-acc = accuracy_score(y_test, preds)
-print("Accuracy:", acc)
+print("MAE (CV):", mae)
+print("RMSE (CV):", rmse)
+print("R2 (CV):", r2)
 
-print("\nConfusion Matrix:\n", confusion_matrix(y_test, preds))
+# Plot actual vs predicted
+plt.figure()
+plt.scatter(y, preds, alpha=0.6)
+plt.xlabel("Actual")
+plt.ylabel("Predicted")
+plt.title("Linear Regression: Actual vs Predicted (CV)")
 
-print("\nClassification Report:\n", classification_report(y_test, preds))
+min_val = min(y.min(), preds.min())
+max_val = max(y.max(), preds.max())
+plt.plot([min_val, max_val], [min_val, max_val], linestyle="--", color="gray")
+plt.show()
+
+# Plot residuals
+residuals = y - preds
+plt.figure()
+plt.hist(residuals, bins=30, alpha=0.7)
+plt.xlabel("Residual (Actual - Predicted)")
+plt.ylabel("Count")
+plt.title("Linear Regression: Residuals (CV)")
+plt.show()
