@@ -21,4 +21,29 @@ y_class = df["verification.result"]
 X_reg = df.drop(["verification.time", "verification.result"], axis=1)
 y_reg = df["verification.time"]
 
+
+# --- OUTLIER DETECTION (IQR METHOD) ---
+print("\n--- Checking for Outliers ---")
+# Select only continuous numerical columns (ignore target/IDs if necessary)
+# For the auction data, verification.time is a continuous variable
+numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+
+for col in numeric_cols:
+    Q1 = df[col].quantile(0.25)
+    Q3 = df[col].quantile(0.75)
+    IQR = Q3 - Q1
+    
+    # Define bounds for what is considered an outlier
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+    # Count how many rows fall outside these bounds
+    outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)]
+    
+    if len(outliers) > 0:
+        print(f"Found {len(outliers)} potential outliers in '{col}'")
+    else:
+        print(f"No outliers found in '{col}'")
+print("-----------------------------\n")
+
 print("Data wrangling complete.")

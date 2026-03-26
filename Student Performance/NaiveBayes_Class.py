@@ -4,8 +4,11 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.naive_bayes import GaussianNB, ComplementNB
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 # load clean data
-data = pd.read_csv("Student Performance/cleaned_student_data.csv")
+data = pd.read_csv("cleaned_student_data.csv")
 
 #imbalance check
 print("Class counts:\n", data["Performance"].value_counts(), "\n")
@@ -49,3 +52,44 @@ comp_preds = comp_model.predict(X_test_comp)
 print("ComplementNB Accuracy:", accuracy_score(y_test, comp_preds))
 print("\nComplementNB Confusion Matrix:\n", confusion_matrix(y_test, comp_preds))
 print("\nComplementNB Classification Report:\n", classification_report(y_test, comp_preds))
+
+
+# --- VISUALIZATION: CONFUSION MATRICES ---
+print("\n--- Generating Confusion Matrix Visuals ---")
+
+# 1. Capture the confusion matrix data
+cm_gauss = confusion_matrix(y_test, gauss_preds)
+cm_comp = confusion_matrix(y_test, comp_preds)
+
+# 2. Set up the figure with 2 subplots side-by-side
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+fig.suptitle('Impact of Algorithm Shift on Class Imbalance', fontsize=16, fontweight='bold', y=1.05)
+
+# 3. Plot GaussianNB (The "Lazy" Model)
+# Using a red/orange color map to imply it's the "bad/before" model
+sns.heatmap(cm_gauss, annot=True, fmt='d', cmap='OrRd', ax=axes[0], cbar=False, annot_kws={"size": 14})
+axes[0].set_title('GaussianNB\n(Majority Class Bias)', fontsize=14, pad=10)
+axes[0].set_xlabel('Predicted Performance Group', fontsize=12)
+axes[0].set_ylabel('Actual Performance Group', fontsize=12)
+# Center labels for groups 1, 2, 3, 4
+axes[0].set_xticks([0.5, 1.5, 2.5, 3.5])
+axes[0].set_xticklabels(['1', '2', '3', '4'])
+axes[0].set_yticks([0.5, 1.5, 2.5, 3.5])
+axes[0].set_yticklabels(['1', '2', '3', '4'], rotation=0)
+
+# 4. Plot ComplementNB (The "Fixed" Model)
+# Using a green color map to imply it's the "good/after" model
+sns.heatmap(cm_comp, annot=True, fmt='d', cmap='Greens', ax=axes[1], cbar=False, annot_kws={"size": 14})
+axes[1].set_title('ComplementNB\n(Balanced Predictions)', fontsize=14, pad=10)
+axes[1].set_xlabel('Predicted Performance Group', fontsize=12)
+axes[1].set_ylabel('Actual Performance Group', fontsize=12)
+axes[1].set_xticks([0.5, 1.5, 2.5, 3.5])
+axes[1].set_xticklabels(['1', '2', '3', '4'])
+axes[1].set_yticks([0.5, 1.5, 2.5, 3.5])
+axes[1].set_yticklabels(['1', '2', '3', '4'], rotation=0)
+
+# 5. Format and Save
+plt.tight_layout()
+output_filename = 'naive_bayes_comparison.png'
+plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+print(f"Success! Visual saved to your current folder as: {output_filename}")
